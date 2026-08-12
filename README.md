@@ -1,57 +1,57 @@
 # Barnes & Noble Book Scraper
 
-Barnes & Noble'ın herkese açık **Bestselling Books** sayfasından güncel kitap verisi toplar ve her çalıştırmada sonuçları CSV ile JSON olarak yeniler.
+Collects current book data from Barnes & Noble's public **Bestselling Books** page and refreshes the CSV and JSON exports on every run.
 
-Toplanan alanlar: başlık, yazar, fiyat, varsa eski fiyat ve indirim, puan, yorum sayısı, format, ISBN-13, stok durumu, satış sıralaması, kategori, ürün ve görsel URL'leri ile toplama zamanı.
+Collected fields: title, author, price, previous price and discount when available, rating, review count, format, ISBN-13, availability, bestseller rank, category, product and image URLs, and scrape timestamp.
 
-> Site sayfa yapısını değiştirebilir. Scraper erişim kontrolü, CAPTCHA veya giriş mekanizmalarını aşmaya çalışmaz.
+> The site's page structure may change. This scraper does not attempt to bypass access controls, CAPTCHAs, or login mechanisms.
 
-## Kurulum (Windows / VS Code)
+## Setup (Windows / VS Code)
 
-Proje klasöründe PowerShell açın.
+Open PowerShell in the project directory.
 
-Mevcut bir `venv` klasörünüz varsa onu kullanın:
+If you already have a `venv` directory, use it:
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 ```
 
-Yoksa oluşturun ve etkinleştirin:
+Otherwise, create and activate one:
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-Ardından paketleri yükleyin:
+Then install the packages:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-PowerShell aktivasyon politikasına takılırsa, aktivasyon yapmadan da şu komutlarla çalışabilirsiniz:
+If PowerShell's execution policy prevents activation, run without activating the environment:
 
 ```powershell
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 .\venv\Scripts\python.exe main.py
 ```
 
-## Çalıştırma
+## Running the scraper
 
 ```powershell
 python main.py
 ```
 
-Scraper terminalde sayfa ilerlemesini gösterir. Tamamlandığında güncel dosyalar şurada oluşur:
+The scraper prints page progress in the terminal. When it completes, it creates or updates:
 
-- `exports/books.csv` — Excel için UTF-8 BOM ile yazılır.
-- `exports/books.json` — Girintili, geçerli JSON dizisidir.
+- `exports/books.csv` — written with a UTF-8 BOM for Excel compatibility.
+- `exports/books.json` — a formatted, valid JSON array.
 
-Bu dosyalar her çalıştırmada **üzerine yazılır**; geçmiş veya veritabanı tutulmaz.
+These files are **overwritten** on every run; no history or database is retained.
 
-## Ayarlar
+## Settings
 
-`scraper.py` dosyasının üst kısmındaki ayarlar tek noktadadır:
+The settings are grouped at the top of `scraper.py`:
 
 ```python
 BASE_URL = "https://www.barnesandnoble.com"
@@ -61,43 +61,43 @@ REQUEST_DELAY = 0.7
 MAX_PAGES = 5
 ```
 
-- `MAX_PAGES = 1`: yalnızca ilk liste sayfası.
-- `MAX_PAGES = 5`: en fazla ilk beş sayfa.
-- `MAX_PAGES = None`: yeni sayfa bulunmayana kadar devam eder.
-- `REQUEST_DELAY`: siteye saygılı istek aralığıdır; düşürmeyin.
+- `MAX_PAGES = 1`: scrape only the first listing page.
+- `MAX_PAGES = 5`: scrape at most the first five listing pages.
+- `MAX_PAGES = None`: continue until no new page is available.
+- `REQUEST_DELAY`: a respectful delay between requests; do not reduce it.
 
-## Alanlar
+## Fields
 
-- `title`: Kitabın ürün başlığı.
-- `author`: Detail sayfasında görünen ana yazar/katkıda bulunan kişi.
-- `current_price`: Seçili ISBN/format için güncel satış fiyatı (`float`).
-- `original_price`: Ana ürün fiyat kutusunda gerçekten gösterilen, güncel fiyattan yüksek eski liste fiyatı; yoksa `null`.
-- `discount_percent`: Eski fiyat doğrulanmışsa `(original_price - current_price) / original_price * 100`; yoksa `null`.
-- `rating` ve `review_count`: Sayfadaki schema.org aggregate rating verisi; sırasıyla `float` ve `integer`, yoksa `null`.
-- `format`: Seçili ISBN'nin formatı (örneğin `Hardcover` veya `Paperback`).
-- `isbn`: ISBN-13/EAN ürün kimliği.
-- `availability`: Ürünün çevrimiçi satın alma durumu. Sayfadaki açık stok metni ile `Add To Cart` / `Pre-Order` gibi gerçek satın alma aksiyonu önceliklidir; bulunamazsa JSON-LD değeri kullanılır.
-- `bestseller_rank`: Liste yanıtında güvenilir bir satış sırası bulunursa sayı; aksi halde `null`.
-- `category`: Detail sayfasındaki kategori bağlantıları, ` | ` ile birleştirilir.
-- `product_url` ve `image_url`: Canonical ürün ve kapak görseli URL'leri.
-- `scraped_at`: Tüm çalışma için bir kez üretilen UTC ISO-8601 toplama zamanı.
+- `title`: The book's product title.
+- `author`: The primary author or contributor shown on the detail page.
+- `current_price`: The current selling price for the selected ISBN/format (`float`).
+- `original_price`: A higher previous list price actually shown in the main product price box; otherwise `null`.
+- `discount_percent`: `(original_price - current_price) / original_price * 100` when a previous price is verified; otherwise `null`.
+- `rating` and `review_count`: Schema.org aggregate rating data from the page, as `float` and `integer`; otherwise `null`.
+- `format`: The selected ISBN's format, such as `Hardcover` or `Paperback`.
+- `isbn`: The ISBN-13/EAN product identifier.
+- `availability`: The product's online purchase status. Explicit visible stock text and live `Add To Cart` / `Pre-Order` actions take priority; JSON-LD is used as a fallback.
+- `bestseller_rank`: A numeric sales rank only when it is reliably present in the listing response; otherwise `null`.
+- `category`: Detail-page category links joined with ` | `.
+- `product_url` and `image_url`: Canonical product and cover-image URLs.
+- `scraped_at`: A UTC ISO-8601 timestamp generated once per scraper run.
 
-## Bilinen sınırlamalar
+## Known limitations
 
-- Yalnızca herkese açık sayfalar okunur; CAPTCHA, giriş, hesap veya erişim kontrolü aşılmaz.
-- B&N fiyat, stok, puan ve katalog bilgisini anlık değiştirebilir. Eksik veya güvenilir olmayan alanlar tahmin edilmez, `null` kalır.
-- `original_price` yalnızca aynı ürünün ana fiyat kutusundan alınır; önerilen ürünlerin fiyatları hiç kullanılmaz.
-- `MAX_PAGES = None` seçeneği yeni/benzersiz kitap kalmadığında durur; yine de günlük kullanımda sayısal bir sınır daha öngörülebilirdir.
+- Only public pages are read; CAPTCHAs, logins, accounts, and access controls are not bypassed.
+- B&N can change prices, availability, ratings, and catalogue data at any time. Missing or unreliable values are not guessed and remain `null`.
+- `original_price` is read only from the current product's main price box. Prices from recommendation cards are never used.
+- `MAX_PAGES = None` stops when no new unique books remain. A numeric limit is still more predictable for normal use.
 
-## Site yapısı değişirse
+## If the site changes
 
-Detay sayfası CSS seçicileri `scraper.py` içindeki `SELECTORS` sözlüğünde merkezi olarak tutulur. Başlık, yazar, fiyat, format veya kategori kaybolursa önce buradaki değerleri güncelleyin.
+Detail-page CSS selectors are centralized in the `SELECTORS` dictionary in `scraper.py`. Update those values first if title, author, price, format, availability, or category fields disappear.
 
-Liste sayfası güncel B&N altyapısında normal ürün kartı HTML'i yerine React Router veri akışı gönderdiği için liste kimlikleri `RSC_PRODUCT_PATTERN` ve `extract_listing_seeds()` ile alınır. Liste hiç ürün bulamazsa değişmesi en muhtemel bölüm burasıdır.
+On B&N's current platform, the listing page sends product data through a React Router data stream instead of normal product-card HTML. Listing identifiers are extracted by `RSC_PRODUCT_PATTERN` and `extract_listing_seeds()`. If no listing products are found, this is the most likely section to update.
 
-## Bağımlılıklar
+## Dependencies
 
-- `httpx`: bağlantıları yeniden kullanan, timeout/redirect/retry kontrolü yapılan HTTP istekleri.
-- `selectolax`: ürün detay HTML'i içindeki JSON-LD ve sayfa öğelerini hızlı CSS seçicileriyle ayrıştırmak için.
+- `httpx`: Makes HTTP requests with connection reuse, timeout, redirect, and retry handling.
+- `selectolax`: Parses JSON-LD and product-detail HTML quickly with CSS selectors.
 
-Playwright kullanılmaz. Gerekli ürün detay verileri normal HTTP ile gelen HTML'de zaten bulunduğundan tarayıcı açmak gereksizdir.
+Playwright is not used. Required product-detail data is already available in HTML returned by normal HTTP requests, so opening a browser is unnecessary.

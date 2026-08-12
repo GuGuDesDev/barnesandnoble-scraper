@@ -1,4 +1,4 @@
-"""Barnes & Noble'dan güncel kitap verisini CSV ve JSON olarak dışa aktarır."""
+"""Export current Barnes & Noble book data to CSV and JSON."""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ from selectolax.parser import HTMLParser
 
 
 # ---------------------------------------------------------------------------
-# Kolay değiştirilebilen ayarlar
+# Easy-to-change settings
 # ---------------------------------------------------------------------------
 BASE_URL = "https://www.barnesandnoble.com"
 START_URL = f"{BASE_URL}/collections/books/bestselling-books"
 TIMEOUT = 30.0
 REQUEST_DELAY = 0.7
-MAX_PAGES: int | None = 5  # Tüm sayfalar için None yapın.
+MAX_PAGES: int | None = 5  # Set to None to scrape all available pages.
 RETRIES = 3
 
 EXPORT_DIR = Path("exports")
@@ -35,15 +35,15 @@ USER_AGENT = (
     "Chrome/140.0.0.0 Safari/537.36"
 )
 
-# Site CSS sınıflarını değiştirdiğinde ilk olarak bu sözlüğü kontrol edin.
+# Check this dictionary first if the site changes its CSS classes.
 SELECTORS = {
     "json_ld": 'script[type="application/ld+json"]',
     "title": "h1.product__title",
     "author": ".product__contributor.desktop-only a",
     "price_box": ".product__prices",
     "format": ".product__prices > div:first-child",
-    # JSON-LD bazen stok durumunu gecikmeli yansitabilir. Gercek satin alma
-    # aksiyonu, urun sayfasindaki guncel durumu daha dogru gosterir.
+    # JSON-LD can sometimes lag behind availability changes. The live purchase
+    # action on the product page is a more accurate source of current status.
     "purchase_button": 'form[action="/cart"] button[type="submit"]',
     "canonical_url": 'link[rel="canonical"]',
     "categories": '[aria-label^="Category:"]',
@@ -68,9 +68,9 @@ FIELDNAMES = [
 ]
 
 
-# Barnes & Noble'ın güncel liste sayfaları ürün kartlarını normal HTML olarak
-# göndermek yerine React Router veri akışında gönderiyor. Bu desenler, o açık
-# yanıttaki ürün kayıtlarının başlangıcını bulur.
+# Barnes & Noble's current listing pages deliver product cards through a React
+# Router data stream rather than conventional HTML. These patterns locate the
+# beginning of product records in that public response.
 RSC_PRODUCT_PATTERN = re.compile(
     r"(?:generated/shopify|projects/[^\"\\]+)/products/(?P<product_id>\d+)"
 )
@@ -81,7 +81,7 @@ MONEY_PATTERN = re.compile(r"\$\s*([0-9][0-9,]*(?:\.\d{1,2})?)")
 
 
 def clean_text(value: str | None) -> str | None:
-    """Boşlukları normalize eder; boş değerleri None'a çevirir."""
+    """Normalize whitespace and convert empty values to None."""
     if not value:
         return None
     cleaned = " ".join(value.split())
@@ -94,7 +94,7 @@ def first_text(tree: HTMLParser, selector: str) -> str | None:
 
 
 def to_float(value: Any) -> float | None:
-    """Para veya sayı değerini güvenli biçimde float'a dönüştürür."""
+    """Safely convert a price or numeric value to float."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -130,7 +130,7 @@ def schema_type_is(node: dict[str, Any], wanted: str) -> bool:
 
 
 def load_schema_nodes(tree: HTMLParser) -> list[dict[str, Any]]:
-    """Sayfadaki JSON-LD bloklarını düz bir schema.org düğüm listesine çevirir."""
+    """Flatten the page's JSON-LD blocks into a list of schema.org nodes."""
     nodes: list[dict[str, Any]] = []
     for script in tree.css(SELECTORS["json_ld"]):
         try:
@@ -164,7 +164,7 @@ def normalise_availability(value: Any) -> str | None:
 
 
 def page_url(page_number: int) -> str:
-    """START_URL'e Barnes & Noble'ın kullandığı ?page=N parametresini ekler."""
+    """Add Barnes & Noble's ?page=N parameter to START_URL."""
     parts = urlsplit(START_URL)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     if page_number > 1:
@@ -175,7 +175,7 @@ def page_url(page_number: int) -> str:
 
 
 def value_after_marker(segment: str, marker: str, pattern: re.Pattern[str]) -> str | None:
-    """Bir RSC ürün kaydında işaretçiden sonraki ilk uygun değeri döndürür."""
+    """Return the first matching value after a marker in an RSC product record."""
     marker_position = segment.find(marker)
     if marker_position < 0:
         return None
@@ -185,17 +185,17 @@ def value_after_marker(segment: str, marker: str, pattern: re.Pattern[str]) -> s
 
 
 def make_product_url(seo_keyword: str, work_id: str, ean: str) -> str:
-    # Sitenin kendi istemci kodu seo keyword içindeki "/" karakterini "-" yapar.
+    # The site's client code replaces "/" with "-" in the SEO keyword.
     slug = quote(seo_keyword.lower().replace("/", "-"), safe="-")
     return f"{BASE_URL}/w/{slug}/{work_id}?ean={ean}"
 
 
 def extract_listing_seeds(html: str) -> list[dict[str, Any]]:
-    """Liste RSC yanıtından detay sayfasına gitmek için gerekli üç anahtarı alır.
+    """Extract the three identifiers needed to reach detail pages from listing RSC data.
 
-    B&N'nin güncel sayfasında ürün kartları HTTP HTML'inde CSS ile seçilebilir
-    değil. Buna karşılık aynı herkese açık HTTP yanıtındaki retailSearchResults
-    verisi ISBN, work id ve SEO anahtarını içerir.
+    On B&N's current pages, product cards cannot be selected from HTTP HTML with
+    CSS. The same public response contains ISBN, work ID, and SEO keyword data
+    inside retailSearchResults.
     """
     results_position = html.rfind("retailSearchResults")
     if results_position < 0:
@@ -210,9 +210,9 @@ def extract_listing_seeds(html: str) -> list[dict[str, Any]]:
         end = matches[index + 1].start() if index + 1 < len(matches) else len(result_data)
         segment = result_data[match.start() : end]
 
-        # İlk ürün kaydında alan adları açıkça görünür. Sonraki RSC kayıtları
-        # aynı alan adlarını referansla tekrar kullanabildiği için, işaretçi
-        # yoksa kaydın içindeki eşsiz ISBN / work id / SEO değerine düşeriz.
+        # The first product record exposes field names directly. Later RSC
+        # records can reuse field-name references, so fall back to unique ISBN,
+        # work ID, and SEO values within the record when a marker is absent.
         ean = value_after_marker(segment, "mfield_bnb__ean", EAN_PATTERN)
         work_id = value_after_marker(segment, "mfield_bnb__workId", WORK_ID_PATTERN)
         seo_keyword = value_after_marker(segment, "mfield_bnb__seoKeywords", SEO_KEYWORD_PATTERN)
@@ -268,10 +268,11 @@ def categories_from_page(tree: HTMLParser) -> str | None:
 
 
 def original_price_from_page(tree: HTMLParser, current_price: float | None) -> float | None:
-    """Ana ürün fiyat kutusunda görünen eski fiyatı varsa bulur.
+    """Find the previous price shown in the main product price box, if present.
 
-    Öneri/benzer ürün kartları bilerek taranmaz; onların fiyatları farklı ürüne
-    ait olabilir. JSON-LD eski fiyat taşımıyorsa bu alan None kalır.
+    Recommendation and similar-product cards are deliberately ignored because
+    their prices can belong to a different product. JSON-LD does not provide a
+    previous price, so the field remains None when it is not shown on the page.
     """
     price_box = tree.css_first(SELECTORS["price_box"])
     if not price_box or current_price is None:
@@ -282,7 +283,7 @@ def original_price_from_page(tree: HTMLParser, current_price: float | None) -> f
 
 
 def availability_from_page(tree: HTMLParser, schema_availability: Any) -> str | None:
-    """Gorunen stok metnini ve satin alma aksiyonunu JSON-LD'nin onune koyar."""
+    """Prefer visible stock text and purchase actions over JSON-LD availability."""
     body = tree.body
     page_text = clean_text(body.text()).casefold() if body else ""
     if "currently out of stock online" in page_text:
@@ -317,7 +318,7 @@ def parse_product_page(
     variant = select_variant(product_group, seed["isbn"])
     offer = get_offer(variant)
 
-    # Bazı ürünlerde ProductGroup yerine doğrudan Book düğümü bulunabilir.
+    # Some products have a direct Book node instead of a ProductGroup.
     book = next(
         (
             node
@@ -407,13 +408,13 @@ class BarnesNobleScraper:
         self.client.close()
 
     def fetch_html(self, url: str) -> tuple[str, str] | None:
-        """HTTP hatalarını raporlar, geçici hatalarda tekrar dener."""
+        """Report HTTP errors and retry temporary failures."""
         for attempt in range(1, RETRIES + 1):
             try:
                 response = self.client.get(url)
                 if response.status_code in {429, 500, 502, 503, 504}:
                     raise httpx.HTTPStatusError(
-                        f"Geçici HTTP hatası: {response.status_code}",
+                        f"Temporary HTTP error: {response.status_code}",
                         request=response.request,
                         response=response,
                     )
@@ -474,7 +475,7 @@ class BarnesNobleScraper:
 
             print(f"Page {page_number} scraped: {page_books} books")
             if page_books == 0:
-                # MAX_PAGES=None iken sayfalama sonuna gelindiğinde sonsuz döngüyü önler.
+                # Prevent an infinite loop when MAX_PAGES=None reaches the end.
                 break
 
             page_number += 1
@@ -489,7 +490,7 @@ def write_exports(books: list[dict[str, Any]]) -> None:
     with JSON_PATH.open("w", encoding="utf-8") as json_file:
         json.dump(books, json_file, ensure_ascii=False, indent=2)
 
-    # utf-8-sig, Excel'in Windows'ta Türkçe ve özel karakterleri sorunsuz açmasına yardım eder.
+    # utf-8-sig helps Excel on Windows open Unicode and special characters correctly.
     with CSV_PATH.open("w", encoding="utf-8-sig", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=FIELDNAMES, extrasaction="ignore")
         writer.writeheader()
